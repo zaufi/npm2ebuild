@@ -1,0 +1,150 @@
+#!/usr/bin/env node
+/**
+ * \brief Read NPM package info and produce a Gentoo ebuild skeleton.
+ *
+ * This stupid^Wsimple program aimed to help me to write ebuilds for
+ * NPM packages. [There is][neurogeek] a eclass for that I've found and
+ * improve a little which helps a lot.
+ *
+ * \attention Review the log generated and pay attention to warnings!
+ * This program far from good (yeah, just initial (naive) implementation).
+ *
+ * [neurogeek]: git://anongit.gentoo.org/dev/neurogeek.git
+ */
+
+var npm = require('npm');
+var fs = require('fs');
+var mustache = require('mustache');
+var semver = require('semver');
+var argv = require('argv');
+var mkdirp = require('mkdirp');
+
+// Declare program options
+var options = {
+    name: 'output-path'
+  , short: 'o'
+  , type: 'path'
+  , description: 'Output path to write ebuilds hierarchy'
+};
+
+var args = argv.option(options).run();
+// console.log("%j", args);
+
+if (!args.targets.length)
+{
+    console.log('No package(s) given');
+    process.exit(0);
+}
+
+/// \todo Avoid hardcode
+var EBUILD_TEMPLATE = fs.readFileSync('./templates/ebuild.template');
+var seen_packages = [];
+
+/// Helper function to render ebuild
+function handle_package(info)
+{
+    var dependencies = [];
+    if (info.hasOwnProperty('dependencies'))
+    {
+        Object.keys(info.dependencies).forEach(
+            function(key)
+            {
+                var version = null;
+                var match = /(^|~|>|>=)?\s*([\w.]+)/.exec(info.dependencies[key]);
+                if (match)
+                {
+                    version = match[2];
+                    if (!semver.valid(version))
+                    {
+                        console.log('*** ATTENTION: version parse error on "%s"', info.dependencies[key]);
+                        version = null;
+                    }
+                }
+
+                // console.log('    %s %s %j', key, info.dependencies[key], version);
+                dependencies.push({
+                    name: key
+                  , version: version
+                  });
+                // Produce ebuilds for dependencies
+                produce_ebuilds(key);
+            }
+          );
+    }
+
+    // console.log("%j", info);
+    console.log("---[BEGIN %s %s]---", info.name, info.version);
+    console.log("description: %s", info.description);
+    console.log("homepage: %s", info.homepage);
+    console.log("license: %s", info.license);
+    console.log('dependencies: %j', dependencies);
+    console.log('dependencies_raw: %j', info.dependencies);
+    console.log("---[END %s %s]---\n", info.name, info.version);
+
+    var ebuild_data = {
+        name: info.name
+      , version: info.version
+      , description: info.description
+      , homepage: info.homepage
+      , license: info.license
+      , dependencies: dependencies
+    };
+
+    var ebuild_dir = (args.options['output-path'] ? args.options['output-path'] + '/' : './')
+      + 'dev-nodejs/' + info.name + '/';
+    mkdirp(
+        ebuild_dir
+      , function(err)
+        {
+            var output = mustache.render(EBUILD_TEMPLATE.toString(), ebuild_data);
+            fs.writeFile(ebuild_dir + info.name + '-' + info.version + '.ebuild', output);
+        }
+      );
+
+    var raw_json_dir = (args.options['output-path'] ? args.options['output-path'] + '/' : './')
+      + 'packages-data/';
+    mkdirp(
+        raw_json_dir
+      , function(err)
+        {
+            fs.writeFile(raw_json_dir + info.name + '-' + info.version + '.json', JSON.stringify(info, null, 2));
+        }
+      );
+}
+
+/// Retrieve package JSON data and produce ebuild for given name
+function produce_ebuilds(package_name)
+{
+    if (seen_packages.indexOf(package_name) != -1)
+    {
+        console.log('*** Skip %s package cuz already made ebuild', package_name);
+        return;
+    }
+
+    npm.load(
+        function (er)
+        {
+            if (er)
+                return handlError(er);
+
+            npm.commands.view(
+                [package_name]
+              , true
+              , function(er, data)
+                {
+                    if (er)
+                        return commandFailed(er);
+                    // command succeeded, and data might have some info
+                    handle_package(data[Object.keys(data)[0]]);
+                }
+              );
+        }
+      );
+
+    seen_packages.push(package_name);
+}
+
+// Iterate over requested package names and produce ebuilds
+args.targets.forEach(produce_ebuilds);
+
+// kate: hl javascript;

@@ -1,0 +1,21 @@
+# Copyright 1999-2015 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=5
+
+inherit npm
+
+DESCRIPTION="{{description}}"
+{{#homepage}}
+HOMEPAGE="{{{homepage}}}"
+{{/homepage}}
+
+LICENSE="{{license}}"
+SLOT="0"
+KEYWORDS="~amd64 ~x86"
+IUSE=""
+DEPEND=">=net-libs/nodejs-0.8.10"
+RDEPEND="${DEPEND}
+{{#dependencies}}
+    >=dev-nodejs/{{name}}{{#version}}-{{version}}{{/version}}
+{{/dependencies}}"

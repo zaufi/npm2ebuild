@@ -23,6 +23,7 @@
   "devDependencies": {
     "argv": "0.0.2",
     "mustache": "^2.2.1",
-    "semver": "^5.1.0"
+    "semver": "^5.1.0",
+    "spdx": "^0.5.0"
   }
 }

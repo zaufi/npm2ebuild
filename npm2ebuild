@@ -43,6 +43,8 @@ var seen_packages = [];
 /// Helper function to render ebuild
 function handle_package(info)
 {
+    // Transform dependencies into array and produce ebuilds for them
+    // (to avoid second iteration later on same hash ;-)
     var dependencies = [];
     if (info.hasOwnProperty('dependencies'))
     {
@@ -50,14 +52,33 @@ function handle_package(info)
             function(key)
             {
                 var version = null;
+                var operation = '';
+
                 var match = /(^|~|>|>=)?\s*([\w.]+)/.exec(info.dependencies[key]);
                 if (match)
                 {
-                    version = match[2];
-                    if (!semver.valid(version))
+                    // Try to use semver parser to validate version
+                    if (semver.valid(match[2]))
+                    {
+                        version = match[2];
+                    }
+                    else if (match[2].indexOf('x') != -1)
+                    {
+                        version = match[2].replace('x', '*');
+                        console.log('*** NOTE: Found wildcard version: %s -> %s', match[2], version);
+                    }
+                    else
                     {
                         console.log('*** ATTENTION: version parse error on "%s"', info.dependencies[key]);
                         version = null;
+                    }
+                    if (match[1] === '>=' || match[1] === '~' || match[1] === '^')
+                    {
+                        operation = '>=';
+                    }
+                    else if (version)
+                    {
+                        operation = '=';
                     }
                 }
 
@@ -65,6 +86,7 @@ function handle_package(info)
                 dependencies.push({
                     name: key
                   , version: version
+                  , op: operation
                   });
                 // Produce ebuilds for dependencies
                 produce_ebuilds(key);
@@ -72,15 +94,52 @@ function handle_package(info)
           );
     }
 
-    // console.log("%j", info);
-    console.log("---[BEGIN %s %s]---", info.name, info.version);
-    console.log("description: %s", info.description);
-    console.log("homepage: %s", info.homepage);
-    console.log("license: %s", info.license);
-    console.log('dependencies: %j', dependencies);
-    console.log('dependencies_raw: %j', info.dependencies);
-    console.log("---[END %s %s]---\n", info.name, info.version);
+    // Transfrom binary files list into array
+    var bin_files = [];
+    var has_bin_files = false;
+    if (info.hasOwnProperty('bin'))
+    {
+        Object.keys(info.bin).forEach(
+            function(symlink_name)
+            {
+                bin_files.push({
+                    symlink_name: symlink_name
+                  , name: info.bin[symlink_name]
+                  });
+            }
+          );
+        has_bin_files = true;
+    }
 
+    var required_nodejs_version = '0.10';
+    var required_nodejs_version_op = '>=';
+    if (info.hasOwnProperty('engines'))
+    {
+        Object.keys(info.engines).forEach(
+            function(key)
+            {
+                if (key == 'node')
+                {
+                    var match = /(^|~|>|>=)?\s*([\w.]+)/.exec(info.engines[key]);
+                    if (match)
+                    {
+                        var version = match[2];
+                        if (semver.valid(version))
+                        {
+                            required_nodejs_version = version;
+
+                            if (match[1] === '>=' || match[1] === '~' || match[1] === '^')
+                                required_nodejs_version_op = '>=';
+                            else
+                                required_nodejs_version_op = '=';
+                        }
+                    }
+                }
+            }
+          );
+    }
+
+    // Prepare data for rendering template
     var ebuild_data = {
         name: info.name
       , version: info.version
@@ -88,7 +147,17 @@ function handle_package(info)
       , homepage: info.homepage
       , license: info.license
       , dependencies: dependencies
+      , has_bin_files: has_bin_files
+      , bin_files: bin_files
+      , required_nodejs_version: required_nodejs_version
+      , required_nodejs_version_op: required_nodejs_version_op
     };
+
+    // Make some spam
+    // console.log("%j", info);
+    console.log("---[BEGIN %s %s]---", info.name, info.version);
+    console.dir(ebuild_data, {colors: true});
+    console.log("---[END %s %s]---\n", info.name, info.version);
 
     var ebuild_dir = (args.options['output-path'] ? args.options['output-path'] + '/' : './')
       + 'dev-nodejs/' + info.name + '/';
@@ -117,7 +186,7 @@ function produce_ebuilds(package_name)
 {
     if (seen_packages.indexOf(package_name) != -1)
     {
-        console.log('*** Skip %s package cuz already made ebuild', package_name);
+        console.log('*** NOTE: Skip %s package cuz already made/scheduled ebuild for it', package_name);
         return;
     }
 

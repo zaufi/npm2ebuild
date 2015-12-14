@@ -14,8 +14,20 @@ LICENSE="{{license}}"
 SLOT="0"
 KEYWORDS="~amd64 ~x86"
 IUSE=""
-DEPEND=">=net-libs/nodejs-0.8.10"
+DEPEND="{{{required_nodejs_version_op}}}net-libs/nodejs-{{required_nodejs_version}}"
 RDEPEND="${DEPEND}
 {{#dependencies}}
-    >=dev-nodejs/{{name}}{{#version}}-{{version}}{{/version}}
+    {{{op}}}dev-nodejs/{{{name}}}{{#version}}-{{{version}}}{{/version}}
 {{/dependencies}}"
+{{#has_bin_files}}
+
+src_install() {
+        npm_src_install
+
+        exeinto "$(get_nodemoduledir)"/bin
+        {{#bin_files}}
+        doexe {{{name}}}
+        dosym "$(get_nodemoduledir)"/{{{name}}} /usr/bin/{{{symlink_name}}}
+        {{/bin_files}}
+}
+{{/has_bin_files}}

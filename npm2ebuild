@@ -40,6 +40,16 @@ if (!args.targets.length)
 var EBUILD_TEMPLATE = fs.readFileSync('./templates/ebuild.template');
 var seen_packages = [];
 
+/// Helper funtion to produce valid ebuild name from NPM pakcage name
+function make_ebuild_name(npm_pkg_name)
+{
+    return npm_pkg_name.toLowerCase()
+      .replace(new RegExp('[^a-z0-9\\-_]', 'g'), '-')
+        // Fix weird cases
+      .replace('-_', '-')
+      ;
+}
+
 /// Helper function to render ebuild
 function handle_package(info)
 {
@@ -54,7 +64,7 @@ function handle_package(info)
                 var version = null;
                 var operation = '';
 
-                var match = /(^|~|>|>=)?\s*([\w.]+)/.exec(info.dependencies[key]);
+                var match = /(\^|~|>|>=)?\s*([\w.]+)/.exec(info.dependencies[key]);
                 if (match)
                 {
                     // Try to use semver parser to validate version
@@ -84,7 +94,7 @@ function handle_package(info)
 
                 // console.log('    %s %s %j', key, info.dependencies[key], version);
                 dependencies.push({
-                    name: key
+                    name: make_ebuild_name(key)
                   , version: version
                   , op: operation
                   });
@@ -120,7 +130,7 @@ function handle_package(info)
             {
                 if (key == 'node')
                 {
-                    var match = /(^|~|>|>=)?\s*([\w.]+)/.exec(info.engines[key]);
+                    var match = /(\^|~|>|>=)?\s*([\w.]+)/.exec(info.engines[key]);
                     if (match)
                     {
                         var version = match[2];
@@ -139,9 +149,12 @@ function handle_package(info)
           );
     }
 
+    // Make sure package name would be valid
+    var ebuild_name = make_ebuild_name(info.name);
+
     // Prepare data for rendering template
     var ebuild_data = {
-        name: info.name
+        npm_module_name: (ebuild_name !== info.name) ? info.name : null
       , version: info.version
       , description: info.description
       , homepage: info.homepage
@@ -155,18 +168,18 @@ function handle_package(info)
 
     // Make some spam
     // console.log("%j", info);
-    console.log("---[BEGIN %s %s]---", info.name, info.version);
+    console.log("---[BEGIN %s-%s.ebuild data]---", ebuild_name, info.version);
     console.dir(ebuild_data, {colors: true});
-    console.log("---[END %s %s]---\n", info.name, info.version);
+    console.log("---[END %s-%s.ebuild data]---\n", ebuild_name, info.version);
 
     var ebuild_dir = (args.options['output-path'] ? args.options['output-path'] + '/' : './')
-      + 'dev-nodejs/' + info.name + '/';
+      + 'dev-nodejs/' + ebuild_name + '/';
     mkdirp(
         ebuild_dir
       , function(err)
         {
             var output = mustache.render(EBUILD_TEMPLATE.toString(), ebuild_data);
-            fs.writeFile(ebuild_dir + info.name + '-' + info.version + '.ebuild', output);
+            fs.writeFile(ebuild_dir + ebuild_name + '-' + info.version + '.ebuild', output);
         }
       );
 

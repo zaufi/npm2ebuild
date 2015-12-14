@@ -81,11 +81,20 @@ function handle_package(info)
                     }
                     else
                     {
-                        console.log('*** ATTENTION: version parse error on "%s"', info.dependencies[key]);
-                        version = null;
+                        // Last attempt to match not conforming version numbers
+                        var last_attempt_match = /(\d+(.\d+(.\d+)?)?)/.exec(match[2]);
+                        if (last_attempt_match)
+                        {
+                            version = last_attempt_match[1];
+                        }
+                        else
+                        {
+                            console.log('*** ATTENTION: version parse error on "%s"', info.dependencies[key]);
+                            version = null;
+                        }
                     }
                     // Try to choose operation on dependency
-                    if (operation === '')
+                    if (operation === '' && version)
                     {
                         /// \todo Select proper operation
                         if (match[1] === '>=' || match[1] === '~' || match[1] === '^')

@@ -19,9 +19,10 @@
   "bugs": {
     "url": "https://github.com/zaufi/npm2ebuild/issues"
   },
-  "homepage": "https://github.com/zaufi/npm2ebuild#README.md",
-  "devDependencies": {
+  "homepage": "https://github.com/zaufi/npm2ebuild",
+  "dependencies": {
     "argv": "0.0.2",
+    "mkdirp": "^0.5.1",
     "mustache": "^2.2.1",
     "semver": "^5.1.0",
     "spdx": "^0.5.0"

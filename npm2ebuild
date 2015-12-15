@@ -77,7 +77,8 @@ function handle_package(info)
                     else if (match[2].indexOf('x') != -1)
                     {
                         version = match[2].replace('x', '*');
-                        version = version.slice(0, version.indexOf('*') + 1);
+                        // Prevent versions like '1.2.*' -- transform to '1.2*'...
+                        version = version.slice(0, version.indexOf('*') + 1).replace('.*', '*');
                         operation = '=';
                         console.log('*** NOTE: Found wildcard version: %s -> %s', match[2], version);
                     }
@@ -88,6 +89,16 @@ function handle_package(info)
                         if (last_attempt_match)
                         {
                             version = last_attempt_match[1];
+                            if (last_attempt_match[2] == undefined)
+                            {
+                                version += '*';
+                                operation = '=';
+                            }
+                            if (last_attempt_match[2] != undefined && last_attempt_match[3] == undefined)
+                            {
+                                version += '*';
+                                operation = '=';
+                            }
                         }
                         else
                         {
